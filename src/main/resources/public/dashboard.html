@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banking POC — System Dashboard</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263248;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;
+  --green:#10b981;--green-dim:#064e3b;
+  --red:#ef4444;--red-dim:#7f1d1d;
+  --yellow:#f59e0b;--yellow-dim:#78350f;
+  --blue:#3b82f6;--blue-dim:#1e3a5f;
+  --purple:#a78bfa;--purple-dim:#3b0764;
+  --radius:10px;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.nav-link{color:var(--muted);text-decoration:none;font-size:12.5px;border:1px solid var(--border);border-radius:6px;padding:5px 10px;transition:border-color .2s,color .2s}
+.nav-link:hover{color:var(--text);border-color:var(--blue)}
+.health-badge{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s}
+.dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.offline{background:var(--red)}
+.refresh-indicator{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{animation:spin 1s linear infinite;display:inline-block}
+
+main{max-width:1400px;margin:0 auto;padding:20px}
+
+/* Stat tiles */
+.stat-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.stat-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.stat-value{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat-value.green{color:var(--green)}
+.stat-value.blue{color:var(--blue)}
+.stat-value.yellow{color:var(--yellow)}
+.stat-value.purple{color:var(--purple)}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Grid layout */
+.grid{display:grid;grid-template-columns:340px 1fr;gap:16px}
+@media(max-width:960px){.grid{grid-template-columns:1fr}.stat-row{grid-template-columns:repeat(2,1fr)}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.card-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.card-title .count{color:var(--border);font-weight:400;text-transform:none;letter-spacing:0}
+
+/* Accounts */
+.account-list{display:flex;flex-direction:column;gap:8px}
+.account-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s}
+.account-card:hover{border-color:var(--blue)}
+.account-id{font-size:11px;color:var(--muted);margin-bottom:2px}
+.account-name{font-weight:600;font-size:13px}
+.account-balance{font-size:16px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums}
+@keyframes flash{0%,100%{color:var(--green)}50%{color:#6ee7b7}}
+.balance-changed{animation:flash .5s ease}
+
+/* Activity feed */
+.feed{display:flex;flex-direction:column;gap:6px;max-height:640px;overflow-y:auto}
+.feed-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;font-size:12.5px}
+.feed-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
+.feed-body{flex:1;min-width:0}
+.feed-title{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed-proto{font-family:monospace;color:var(--blue);font-size:11px}
+.feed-time{color:var(--muted);font-size:10.5px;white-space:nowrap}
+.status-badge{padding:3px 10px;border-radius:12px;font-size:10.5px;font-weight:600;letter-spacing:.03em;white-space:nowrap;flex-shrink:0}
+.status-PROCESSING,.status-AWAITING_DISBURSEMENT{background:var(--yellow-dim);color:var(--yellow)}
+.status-COMPLETED,.status-ACTIVE,.status-PAID_OFF{background:var(--green-dim);color:var(--green)}
+.status-CANCELED{background:var(--red-dim);color:var(--red)}
+.status-FAILED{background:var(--purple-dim);color:var(--purple)}
+.empty{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
+
+/* Loans table */
+.loan-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.loan-table th{text-align:left;color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--border)}
+.loan-table td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.loan-table tr:last-child td{border-bottom:none}
+.loan-table td.mono{font-family:monospace;color:var(--blue);font-size:11.5px}
+.progress-bar{background:var(--bg);border-radius:6px;height:6px;overflow:hidden;width:80px}
+.progress-fill{background:var(--blue);height:100%;border-radius:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📊 Banking POC &mdash; System Dashboard</div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <a class="nav-link" href="/ui/index.html">→ Transfers</a>
+    <a class="nav-link" href="/ui/payroll-loan.html">→ Payroll Loan</a>
+    <div class="refresh-indicator" id="refreshLabel"><span class="spinner">⟳</span> refreshing…</div>
+    <div class="health-badge"><div class="dot" id="healthDot"></div><span id="healthLabel">checking…</span></div>
+  </div>
+</header>
+
+<main>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-label">Total Balance</div>
+      <div class="stat-value green" id="statTotalBalance">—</div>
+      <div class="stat-sub" id="statAccountCount">— accounts</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Transfers Completed</div>
+      <div class="stat-value blue" id="statTransfersOk">—</div>
+      <div class="stat-sub" id="statTransfersTotal">of — total</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Transfers Failed / Cancelled</div>
+      <div class="stat-value yellow" id="statTransfersFailed">—</div>
+      <div class="stat-sub">saga compensation triggered</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Active Loans</div>
+      <div class="stat-value purple" id="statLoansActive">—</div>
+      <div class="stat-sub" id="statLoansTotal">of — contracts</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Outstanding Loan Balance</div>
+      <div class="stat-value yellow" id="statLoansOutstanding">—</div>
+      <div class="stat-sub">across all active contracts</div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT COLUMN -->
+    <div>
+      <div class="card">
+        <div class="card-title">💳 Accounts</div>
+        <div class="account-list" id="accountList"><div class="empty">⏳ Loading…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧾 Loan Contracts <span class="count" id="loanCount"></span></div>
+        <div style="overflow-x:auto">
+          <table class="loan-table">
+            <thead>
+              <tr><th>Contract</th><th>Client</th><th>Installment</th><th>Progress</th><th>Status</th></tr>
+            </thead>
+            <tbody id="loanTableBody">
+              <tr><td colspan="5" class="empty">⏳ Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="card">
+      <div class="card-title">📋 Recent Activity <span class="count" id="feedCount"></span></div>
+      <div class="feed" id="activityFeed">
+        <div class="empty">No activity yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtMoney = v => '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtTime = iso => new Date(iso).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+// SAGA/contract statuses -> display labels + CSS status class
+const TRANSFER_STATUS = {
+  PROCESSING: {label:'Processing', cls:'PROCESSING'},
+  COMPLETED:  {label:'Completed',  cls:'COMPLETED'},
+  CANCELED:   {label:'Cancelled',  cls:'CANCELED'},
+  FAILED:     {label:'Failed',     cls:'FAILED'}
+};
+const LOAN_STATUS = {
+  AWAITING_DISBURSEMENT: {label:'Awaiting Disbursement', cls:'AWAITING_DISBURSEMENT'},
+  ACTIVE:   {label:'Active',    cls:'ACTIVE'},
+  PAID_OFF: {label:'Paid Off',  cls:'PAID_OFF'},
+  CANCELED: {label:'Cancelled', cls:'CANCELED'}
+};
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok && res.status !== 404) throw new Error('HTTP ' + res.status);
+  return res.status === 404 ? null : res.json();
+}
+
+let lastBalances = {};
+
+async function refreshHealth() {
+  try {
+    const h = await api('/transfers/health');
+    $('healthDot').className = 'dot online';
+    $('healthLabel').textContent = `${h.kafka} · ${h.sqs}`;
+  } catch (e) {
+    $('healthDot').className = 'dot offline';
+    $('healthLabel').textContent = 'offline';
+  }
+}
+
+function renderAccounts(accounts) {
+  const total = accounts.reduce((s, a) => s + Number(a.balance), 0);
+  $('statTotalBalance').textContent = fmtMoney(total);
+  $('statAccountCount').textContent = `${accounts.length} accounts`;
+
+  $('accountList').innerHTML = accounts.map(a => {
+    const changed = lastBalances[a.id] !== undefined && lastBalances[a.id] !== a.balance;
+    lastBalances[a.id] = a.balance;
+    return `<div class="account-card">
+      <div><div class="account-id">${a.id}</div><div class="account-name">${a.holder}</div></div>
+      <div class="account-balance ${changed ? 'balance-changed' : ''}">${fmtMoney(a.balance)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTransferStats(history) {
+  const completed = history.filter(h => h.status === 'COMPLETED').length;
+  const failed = history.filter(h => h.status === 'CANCELED' || h.status === 'FAILED').length;
+  $('statTransfersOk').textContent = completed;
+  $('statTransfersTotal').textContent = `of ${history.length} total`;
+  $('statTransfersFailed').textContent = failed;
+}
+
+function renderLoans(loans) {
+  const active = loans.filter(l => l.status === 'ACTIVE');
+  const outstanding = active.reduce((s, l) => s + Number(l.outstandingBalance || 0), 0);
+  $('statLoansActive').textContent = active.length;
+  $('statLoansTotal').textContent = `of ${loans.length} contracts`;
+  $('statLoansOutstanding').textContent = fmtMoney(outstanding);
+  $('loanCount').textContent = loans.length ? `(${loans.length})` : '';
+
+  if (!loans.length) {
+    $('loanTableBody').innerHTML = '<tr><td colspan="5" class="empty">No loan contracts yet.</td></tr>';
+    return;
+  }
+
+  $('loanTableBody').innerHTML = loans.map(l => {
+    const st = LOAN_STATUS[l.status] || {label: l.status, cls: l.status};
+    const pct = l.termMonths ? Math.min(100, Math.round((l.installmentsPaid / l.termMonths) * 100)) : 0;
+    return `<tr>
+      <td class="mono">${l.contractId}</td>
+      <td>${l.enrollmentId}</td>
+      <td>${fmtMoney(l.installmentAmount)}</td>
+      <td>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${l.installmentsPaid}/${l.termMonths}</div>
+      </td>
+      <td><span class="status-badge status-${st.cls}">${st.label}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFeed(history, loans) {
+  const items = [];
+
+  history.forEach(h => {
+    const st = TRANSFER_STATUS[h.status] || {label: h.status, cls: h.status};
+    items.push({
+      time: h.startedAt,
+      icon: '💸',
+      title: `${h.sourceAccount} → ${h.targetAccount} · ${fmtMoney(h.amount)}`,
+      proto: h.protocolId,
+      cls: st.cls,
+      label: st.label
+    });
+  });
+
+  loans.forEach(l => {
+    const st = LOAN_STATUS[l.status] || {label: l.status, cls: l.status};
+    items.push({
+      time: l.contractedAt,
+      icon: '🧾',
+      title: `Loan for ${l.enrollmentId} · ${fmtMoney(l.requestedAmount)}`,
+      proto: l.contractId,
+      cls: st.cls,
+      label: st.label
+    });
+  });
+
+  items.sort((a, b) => new Date(b.time) - new Date(a.time));
+  $('feedCount').textContent = items.length ? `(${items.length})` : '';
+
+  if (!items.length) {
+    $('activityFeed').innerHTML = '<div class="empty">No activity yet.</div>';
+    return;
+  }
+
+  $('activityFeed').innerHTML = items.slice(0, 40).map(it => `
+    <div class="feed-item">
+      <div class="feed-icon">${it.icon}</div>
+      <div class="feed-body">
+        <div class="feed-title">${it.title}</div>
+        <div class="feed-proto">${it.proto}</div>
+      </div>
+      <div class="feed-time">${fmtTime(it.time)}</div>
+      <span class="status-badge status-${it.cls}">${it.label}</span>
+    </div>
+  `).join('');
+}
+
+async function refreshAll() {
+  $('refreshLabel').style.visibility = 'visible';
+  try {
+    const [accounts, history, loans] = await Promise.all([
+      api('/transfers/accounts'),
+      api('/transfers/history'),
+      api('/loans/payroll')
+    ]);
+    renderAccounts(accounts || []);
+    renderTransferStats(history || []);
+    renderLoans(loans || []);
+    renderFeed(history || [], loans || []);
+  } catch (e) {
+    console.error('Dashboard refresh failed', e);
+  }
+  $('refreshLabel').style.visibility = 'hidden';
+}
+
+refreshHealth();
+refreshAll();
+setInterval(refreshHealth, 5000);
+setInterval(refreshAll, 3000);
+</script>
+
+</body>
+</html>

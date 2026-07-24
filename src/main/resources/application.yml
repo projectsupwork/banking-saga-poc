@@ -1,0 +1,87 @@
+micronaut:
+  application:
+    name: banking-saga-poc
+  server:
+    port: 8080
+  executors:
+    kafka:
+      type: fixed
+      nThreads: 4
+  router:
+    static-resources:
+      default:
+        paths: classpath:public
+        mapping: /ui/**
+
+# Kafka Producer + Consumer
+kafka:
+  bootstrap:
+    servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+  producers:
+    transfers-producer:
+      # Exactly-once delivery semantics
+      acks: all
+      enable:
+        idempotence: true
+      retries: 3
+    payroll-loan-producer:
+      acks: all
+      enable:
+        idempotence: true
+      retries: 3
+  consumers:
+    transfer-processor:
+      group:
+        id: transfer-processor
+      # Auto-commit disabled: manual commit guarantees at-least-once
+      enable:
+        auto:
+          commit: false
+      auto:
+        offset:
+          reset: earliest
+    payroll-loan-processor:
+      group:
+        id: payroll-loan-processor
+      enable:
+        auto:
+          commit: false
+      auto:
+        offset:
+          reset: earliest
+  topics:
+    transfers:
+      requested:
+        name: transfers.requested
+        partitions: 3
+        replication-factor: 1
+    loans:
+      payroll:
+        requested:
+          name: loans.payroll.requested
+          partitions: 3
+          replication-factor: 1
+
+# Payroll Loan
+payroll-loan:
+  deduction:
+    # Interval of the payroll/benefit deduction cycle. Compressed for demo
+    # purposes (production would be monthly, aligned with the payroll or
+    # benefit payment date).
+    interval: 30s
+
+# AWS / LocalStack
+aws:
+  region: ${AWS_REGION:us-east-1}
+  sqs:
+    endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID:localstack}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:localstack}
+
+# Structured logging
+logger:
+  levels:
+    com.bank.poc: DEBUG
+    org.apache.kafka: WARN
+    software.amazon.awssdk: WARN

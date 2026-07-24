@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payroll Loan — SAGA Dashboard</title>
+<link rel="stylesheet" href="chatbot.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263248;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;
+  --green:#10b981;--green-dim:#064e3b;
+  --red:#ef4444;--red-dim:#7f1d1d;
+  --yellow:#f59e0b;--yellow-dim:#78350f;
+  --blue:#3b82f6;--blue-dim:#1e3a5f;
+  --purple:#a78bfa;--purple-dim:#3b0764;
+  --radius:10px;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+/* Header */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.nav-link{color:var(--muted);text-decoration:none;font-size:12.5px;border:1px solid var(--border);border-radius:6px;padding:5px 10px;transition:border-color .2s,color .2s}
+.nav-link:hover{color:var(--text);border-color:var(--blue)}
+.health-badge{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s}
+.dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.offline{background:var(--red)}
+.refresh-indicator{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{animation:spin 1s linear infinite;display:inline-block}
+
+/* Layout */
+main{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px 20px;max-width:1680px;margin:0 auto}
+
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px;justify-content:space-between}
+
+/* Accounts */
+.account-list{display:flex;flex-direction:column;gap:8px}
+.account-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center}
+.account-id{font-size:11px;color:var(--muted);margin-bottom:2px}
+.account-name{font-weight:600;font-size:13px}
+.account-balance{font-size:17px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums}
+@keyframes flash{0%,100%{color:var(--green)}50%{color:#6ee7b7}}
+.balance-changed{animation:flash .5s ease}
+
+/* Form */
+.form-group{margin-bottom:10px}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+select,input[type=number],input[type=text]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;transition:border-color .2s}
+select:focus,input:focus{border-color:var(--blue)}
+select option{background:var(--surface)}
+.input-row{display:flex;gap:6px}
+.input-row input{flex:1}
+.btn{width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s}
+.btn:hover{opacity:.9}
+.btn:active{transform:scale(.99)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-mini{width:auto;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-weight:500}
+.alert{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:12px;display:none}
+.alert.success{background:var(--green-dim);color:#6ee7b7;display:block}
+.alert.error{background:var(--red-dim);color:#fca5a5;display:block}
+.divider{height:1px;background:var(--border);margin:12px 0}
+.hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Right column */
+.right-col{display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 88px)}
+
+/* Info bar */
+.info-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:44px;font-size:13px;flex-wrap:wrap}
+.info-bar .protocol{font-family:monospace;color:var(--blue);font-weight:700;font-size:13px}
+.info-bar .route{color:var(--muted)}
+.info-bar .amount-b{font-weight:700}
+.status-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.04em;white-space:nowrap}
+.status-AWAITING_DISBURSEMENT{background:var(--yellow-dim);color:var(--yellow)}
+.status-ACTIVE{background:var(--blue-dim);color:var(--blue)}
+.status-PAID_OFF{background:var(--green-dim);color:var(--green)}
+.status-CANCELED{background:var(--red-dim);color:var(--red)}
+
+/* Diagram */
+.diagram-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;flex-shrink:0}
+.diagram-wrap svg{display:block;width:980px;height:820px}
+
+/* Amortization */
+.amort-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.amort-stat{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.amort-stat .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.amort-stat .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.progress-wrap{margin-bottom:12px}
+.progress-label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.progress-track{height:8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .4s ease}
+.deduction-log{display:flex;flex-direction:column;gap:5px;max-height:130px;overflow-y:auto}
+.deduction-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11.5px;display:flex;justify-content:space-between;gap:8px}
+.deduction-item .installment{color:var(--text);font-weight:600}
+.deduction-item .balance{color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Mini history */
+.history-mini-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;flex:1;min-height:160px;overflow:hidden;display:flex;flex-direction:column}
+.history-mini{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+.hist-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border-color .15s,background .15s;font-size:12px}
+.hist-item:hover{border-color:var(--blue);background:var(--blue-dim)}
+.hist-item.selected{border-color:var(--blue);background:var(--blue-dim)}
+.hist-proto{font-family:monospace;color:var(--blue);font-size:11px;font-weight:600}
+.hist-route{color:var(--text)}
+.hist-val{color:var(--muted);font-size:11px}
+.empty{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
+
+/* SVG diagram elements */
+.msg-group{opacity:0}
+.msg-group.visible{opacity:1}
+
+@keyframes lifePulse{0%,100%{opacity:.3;r:4}50%{opacity:1;r:7}}
+.pulse-dot{animation:lifePulse 1.2s ease-in-out infinite}
+
+@media(max-width:900px){main{grid-template-columns:1fr}.right-col{min-height:auto}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🧾 Payroll Loan &mdash; SAGA Dashboard</div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <a class="nav-link" href="/ui/index.html">→ Transfers</a>
+    <a class="nav-link" href="/ui/dashboard.html">→ Dashboard</a>
+    <div class="refresh-indicator" id="refreshLabel"><span class="spinner">⟳</span> refreshing…</div>
+    <div class="health-badge"><div class="dot" id="healthDot"></div><span id="healthLabel">checking…</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- LEFT SIDEBAR -->
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <div class="card">
+      <div class="card-title">💳 Accounts</div>
+      <div class="account-list" id="accountList"><div class="empty">⏳ Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ New Loan</div>
+      <div class="form-group"><label>Customer Account</label><select id="customerAccount"></select></div>
+      <div class="form-group">
+        <label>Payroll/benefit enrollment id</label>
+        <div class="input-row">
+          <input type="text" id="enrollmentId" placeholder="ENR-000000">
+          <button class="btn btn-mini" onclick="generateEnrollment()">generate</button>
+        </div>
+      </div>
+      <div class="form-group"><label>Monthly income ($)</label><input type="number" id="monthlyIncome" min="0.01" step="0.01" value="3000.00"></div>
+      <div class="form-group"><label>Requested amount ($)</label><input type="number" id="requestedAmount" min="100" step="0.01" value="5000.00"></div>
+      <div class="form-group"><label>Term (months, 24–120)</label><input type="number" id="termMonths" min="24" max="120" step="1" value="36"></div>
+      <button class="btn" id="loanBtn" onclick="submitLoan()">Take Loan →</button>
+      <div class="hint">Installment ≤ 35% of income (payroll margin) · fixed rate 1.54%/mo.</div>
+      <div class="alert" id="alert"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ Quick Scenarios</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <button class="btn" style="background:var(--green)" onclick="quickScenario('normal')">Alice · $5,000 over 36 months</button>
+        <button class="btn" style="background:var(--red)" onclick="quickScenario('margin')">Bob · margin exceeded</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-col">
+
+    <!-- Selected contract bar -->
+    <div class="info-bar" id="infoBar" style="color:var(--muted)">
+      Select a contract in the history to watch the animated SAGA diagram
+    </div>
+
+    <!-- Sequence Diagram -->
+    <div class="diagram-wrap">
+      <svg id="seqDiagram" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0">
+
+      <!-- Amortization panel -->
+      <div class="card" style="overflow-y:auto">
+        <div class="card-title">💰 Amortization <span id="amortSub" style="color:var(--border);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+        <div id="amortEmpty" class="empty">Select a contract to see the payroll deduction.</div>
+        <div id="amortBody" style="display:none">
+          <div class="progress-wrap">
+            <div class="progress-label"><span id="progressLabel">0 / 0 installments</span><span id="progressPct">0%</span></div>
+            <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+          </div>
+          <div class="amort-grid">
+            <div class="amort-stat"><div class="l">Outstanding balance</div><div class="v" id="outstandingVal">—</div></div>
+            <div class="amort-stat"><div class="l">Monthly installment</div><div class="v" id="installmentVal">—</div></div>
+          </div>
+          <button class="btn" id="deductionBtn" onclick="simulateDeduction()" style="margin-bottom:10px">🔁 Simulate next deduction</button>
+          <div class="deduction-log" id="deductionLog"></div>
+        </div>
+      </div>
+
+      <!-- Mini history list -->
+      <div class="history-mini-wrap">
+        <div class="card-title" style="margin-bottom:8px">📋 Contracts <span id="histCount" style="color:var(--border);font-weight:400"></span></div>
+        <div class="history-mini" id="historyMini">
+          <div class="empty">No contracts yet.</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SEQ_W = 980, SEQ_H = 820;
+
+const ACTORS = [
+  { id:'client',   label:'Client',         icon:'👤', x:60  },
+  { id:'api',      label:'REST API',       icon:'⚡', x:200 },
+  { id:'kafka',    label:'Kafka',          icon:'📨', x:340 },
+  { id:'consumer', label:'Consumer',       icon:'⚙️', x:480 },
+  { id:'loan',     label:'PayrollLoan',    icon:'📋', x:620 },
+  { id:'account',  label:'AccountService', icon:'🏦', x:760 },
+  { id:'sqs',      label:'SQS',            icon:'📬', x:900 },
+];
+const ACTOR_BOX_H = 58;
+
+const MSGS = [
+  // SAGA_STARTED
+  {id:'m01',from:0,to:1,label:'POST /loans/payroll',            grp:0,y:108,type:'call'},
+  {id:'m02',from:1,to:2,label:'publish(event)',                 grp:0,y:158,type:'async'},
+  {id:'m03',from:1,to:0,label:'202 Accepted',                   grp:0,y:208,type:'return'},
+  // STEP1 — payroll margin
+  {id:'m04',from:2,to:3,label:'consume(event)',                 grp:1,y:272,type:'async'},
+  {id:'m05',from:3,to:4,label:'validatePayrollMargin()',        grp:1,y:320,type:'call'},
+  {id:'m06',from:4,to:3,label:'OK — installment ≤ 35% income',  grp:1,y:366,type:'return'},
+  {id:'m06e',from:4,to:3,label:'✗ PayrollMarginExceeded',       grp:1,y:366,type:'error'},
+  // STEP2 — activate contract
+  {id:'m07',from:3,to:4,label:'activateContract(contractId)',   grp:2,y:430,type:'call'},
+  {id:'m08',from:4,to:3,label:'status: ACTIVE',                 grp:2,y:476,type:'return'},
+  // STEP3 — disbursement (reuses AccountService.credit)
+  {id:'m09',from:3,to:5,label:'credit(customerAccount, amount)',grp:3,y:540,type:'call'},
+  {id:'m10',from:5,to:3,label:'newBalance (credited)',          grp:3,y:586,type:'return'},
+  // STEP4 happy
+  {id:'m11',from:3,to:6,label:'publish(notification)',          grp:4,y:650,type:'async'},
+  {id:'m12',from:6,to:3,label:'messageId (sent)',               grp:4,y:696,type:'return'},
+  // STEP4 warn
+  {id:'m11w',from:3,to:6,label:'publish(notification)',         grp:4,y:650,type:'async'},
+  {id:'m12e',from:6,to:3,label:'✗ SQS Error (non-critical)',    grp:4,y:696,type:'error'},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let accounts = [];
+let contracts = [];
+let selectedId = null;
+let shownMsgIds = new Set();
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmt = n => '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-US') : '';
+
+function svgEl(tag, attrs={}) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) { const err = new Error(r.status); err.status = r.status; throw err; }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ── Build SVG skeleton ─────────────────────────────────────────────────────
+function initDiagram() {
+  const svg = document.getElementById('seqDiagram');
+  svg.innerHTML = '';
+
+  const defs = svgEl('defs');
+  const colors = {blue:'#3b82f6',green:'#10b981',yellow:'#f59e0b',red:'#ef4444',muted:'#475569'};
+  for (const [name, fill] of Object.entries(colors)) {
+    const m = svgEl('marker',{id:`arrow-${name}`,viewBox:'0 0 10 8',refX:'9',refY:'4',markerWidth:'6',markerHeight:'6',orient:'auto'});
+    const p = svgEl('path',{d:'M 0 0 L 10 4 L 0 8 z',fill});
+    m.appendChild(p);
+    defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+
+  const sepYs = [245, 405, 510, 622];
+  for (const sy of sepYs) {
+    const sep = svgEl('line',{x1:'20',y1:sy,x2:'960',y2:sy,stroke:'#1e293b',
+      'stroke-width':'1','stroke-dasharray':'4,4'});
+    svg.appendChild(sep);
+  }
+
+  ACTORS.forEach(actor => {
+    const ll = svgEl('line',{
+      x1:actor.x,y1:ACTOR_BOX_H+6,x2:actor.x,y2:SEQ_H-16,
+      stroke:'#334155','stroke-width':'1.5','stroke-dasharray':'6,4'
+    });
+    svg.appendChild(ll);
+  });
+
+  const BW=118, BH=52;
+  ACTORS.forEach(actor => {
+    const bx = actor.x - BW/2;
+    const shadow = svgEl('rect',{x:bx+2,y:10,width:BW,height:BH,rx:'8',fill:'#0f172a','opacity':'.6'});
+    svg.appendChild(shadow);
+    const rect = svgEl('rect',{x:bx,y:8,width:BW,height:BH,rx:'8',
+      fill:'#1e293b',stroke:'#475569','stroke-width':'1.5'});
+    svg.appendChild(rect);
+    const icon = svgEl('text',{x:actor.x,y:28,'text-anchor':'middle','font-size':'15','dominant-baseline':'middle'});
+    icon.textContent = actor.icon;
+    svg.appendChild(icon);
+    const lbl = svgEl('text',{x:actor.x,y:46,'text-anchor':'middle','font-size':'10.5',
+      fill:'#cbd5e1','font-family':'system-ui,sans-serif','font-weight':'600'});
+    lbl.textContent = actor.label;
+    svg.appendChild(lbl);
+  });
+
+  MSGS.forEach(msg => {
+    const g = buildMsgGroup(msg);
+    g.setAttribute('id', `msg-${msg.id}`);
+    g.setAttribute('class','msg-group');
+    svg.appendChild(g);
+  });
+
+  const noteG = svgEl('g');
+  noteG.setAttribute('id','statusNote');
+  noteG.style.display = 'none';
+  svg.appendChild(noteG);
+
+  const pulse = svgEl('circle',{id:'pulseDot',cx:'480',cy:'272',r:'5',fill:'#3b82f6'});
+  pulse.style.display = 'none';
+  svg.appendChild(pulse);
+}
+
+function buildMsgGroup(msg) {
+  const g = svgEl('g');
+  const fromX = ACTORS[msg.from].x;
+  const toX   = ACTORS[msg.to].x;
+  const y     = msg.y;
+  const goRight = toX > fromX;
+
+  const typeStyle = {
+    call:   {stroke:'#3b82f6',dasharray:null,  marker:'blue'},
+    return: {stroke:'#10b981',dasharray:'6,3', marker:'green'},
+    async:  {stroke:'#f59e0b',dasharray:'6,3', marker:'yellow'},
+    error:  {stroke:'#ef4444',dasharray:null,  marker:'red'},
+  }[msg.type] || {stroke:'#94a3b8',dasharray:null,marker:'muted'};
+
+  const ARROW_GAP = 11;
+  const x1 = fromX;
+  const x2 = goRight ? toX - ARROW_GAP : toX + ARROW_GAP;
+  const len = Math.abs(x2 - x1);
+
+  const line = svgEl('line',{x1,y1:y,x2,y2:y,
+    stroke:typeStyle.stroke,'stroke-width':'2',
+    'marker-end':`url(#arrow-${typeStyle.marker})`});
+  if (typeStyle.dasharray) line.setAttribute('stroke-dasharray', typeStyle.dasharray);
+  line.setAttribute('data-len', len);
+  line.setAttribute('class','arrow-line');
+  g.appendChild(line);
+
+  const midX = (fromX + toX) / 2;
+  const labelY = y - 6;
+  const bg = svgEl('rect',{x:midX-64,y:labelY-11,width:'128',height:'14',rx:'3',fill:'#0f172a','opacity':'.75'});
+  g.appendChild(bg);
+
+  const lbl = svgEl('text',{x:midX,y:labelY,
+    'text-anchor':'middle','font-size':'9.5','font-family':'monospace',fill:typeStyle.stroke});
+  lbl.textContent = msg.label;
+  g.appendChild(lbl);
+
+  return g;
+}
+
+// ── Update diagram from contract data ──────────────────────────────────────
+function getVisibleIds(contract) {
+  const eventSet = new Set((contract.history || []).map(e => e.step));
+  const ids = new Set();
+
+  if (eventSet.has('SAGA_STARTED'))             ['m01','m02','m03'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP1_MARGIN_VALIDATED'))   ['m04','m05','m06'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP2_CONTRACT_ACTIVATED')) ['m07','m08'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP3_DISBURSEMENT'))       ['m09','m10'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP4_SQS'))                ['m11','m12'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP4_SQS_FAILED'))         ['m11w','m12e'].forEach(x=>ids.add(x));
+
+  if (eventSet.has('CANCELED') && !eventSet.has('STEP1_MARGIN_VALIDATED')) {
+    ids.add('m04'); ids.add('m05'); ids.add('m06e');
+  }
+
+  return ids;
+}
+
+function updateDiagram(contract, animate) {
+  if (!contract) { clearDiagram(); return; }
+
+  const visibleIds = getVisibleIds(contract);
+  const eventSet   = new Set((contract.history || []).map(e => e.step));
+
+  const newIds = new Set([...visibleIds].filter(id => !shownMsgIds.has(id)));
+  shownMsgIds  = new Set(visibleIds);
+
+  const allMsgMap = Object.fromEntries(MSGS.map(m=>[m.id,m]));
+  const ordered = [...visibleIds].sort((a,b) => (allMsgMap[a]?.y||0) - (allMsgMap[b]?.y||0));
+
+  if (animate) {
+    MSGS.forEach(m => {
+      const g = document.getElementById(`msg-${m.id}`);
+      if (g) { g.className.baseVal='msg-group'; g.style.opacity='0'; }
+    });
+    shownMsgIds.clear();
+
+    let delay = 0;
+    let lastGrp = -1;
+    for (const id of ordered) {
+      const m = allMsgMap[id];
+      const grpDelay = (m && m.grp !== lastGrp) ? 300 : 0;
+      delay += grpDelay + 180;
+      if (m) lastGrp = m.grp;
+      revealMsg(id, delay);
+    }
+
+    const totalDelay = delay + 400;
+    setTimeout(() => showStatusNote(contract, eventSet), totalDelay);
+    setTimeout(() => showPulse(contract, eventSet), totalDelay);
+  } else {
+    const sortedNew = [...newIds].sort((a,b) => (allMsgMap[a]?.y||0)-(allMsgMap[b]?.y||0));
+    let delay = 0;
+    for (const id of sortedNew) {
+      revealMsg(id, delay);
+      delay += 200;
+    }
+    for (const id of visibleIds) {
+      if (!newIds.has(id)) {
+        const g = document.getElementById(`msg-${id}`);
+        if (g) { g.style.opacity='1'; g.className.baseVal='msg-group visible'; }
+      }
+    }
+    showStatusNote(contract, eventSet);
+    showPulse(contract, eventSet);
+  }
+
+  MSGS.forEach(m => {
+    if (!visibleIds.has(m.id)) {
+      const g = document.getElementById(`msg-${m.id}`);
+      if (g && !newIds.has(m.id)) { g.style.opacity='0'; g.className.baseVal='msg-group'; }
+    }
+  });
+}
+
+function revealMsg(id, delay) {
+  const g = document.getElementById(`msg-${id}`);
+  if (!g) return;
+  const line = g.querySelector('line.arrow-line');
+  const lbl  = g.querySelector('text');
+  const bg   = g.querySelector('rect');
+  const len  = line ? parseFloat(line.getAttribute('data-len')||'200') : 200;
+
+  g.style.opacity = '1';
+  if (line) {
+    line.style.strokeDasharray  = String(len);
+    line.style.strokeDashoffset = String(len);
+    line.style.transition = 'none';
+  }
+  if (lbl) { lbl.style.opacity='0'; lbl.style.transition='none'; }
+  if (bg)  { bg.style.opacity='0';  bg.style.transition='none'; }
+
+  setTimeout(() => {
+    if (line) {
+      line.style.transition = `stroke-dashoffset 0.38s ease`;
+      line.style.strokeDashoffset = '0';
+    }
+    setTimeout(() => {
+      if (lbl) { lbl.style.transition='opacity 0.2s ease'; lbl.style.opacity='1'; }
+      if (bg)  { bg.style.transition='opacity 0.2s ease';  bg.style.opacity='.75'; }
+      setTimeout(() => {
+        if (line) { line.style.strokeDasharray='none'; line.style.transition=''; }
+        if (lbl)  { lbl.style.transition=''; }
+        if (bg)   { bg.style.transition=''; }
+        g.className.baseVal = 'msg-group visible';
+      }, 220);
+    }, 280);
+  }, delay);
+}
+
+function showStatusNote(contract, eventSet) {
+  const noteG = document.getElementById('statusNote');
+  if (!noteG) return;
+  noteG.innerHTML = '';
+
+  const NW=320, NH=32, NX=(SEQ_W-NW)/2, NY=770;
+
+  let fill,stroke,text;
+  if (contract.status === 'ACTIVE') {
+    fill='#1e3a5f'; stroke='#3b82f6';
+    text='✓ CONTRACT ACTIVE — disbursement credited, monthly deductions running';
+  } else if (contract.status === 'PAID_OFF') {
+    fill='#064e3b'; stroke='#10b981';
+    text='✓ CONTRACT PAID OFF — every installment paid';
+  } else if (contract.status === 'CANCELED') {
+    fill='#7f1d1d'; stroke='#ef4444';
+    const reason = (contract.history||[]).find(e=>e.step==='CANCELED');
+    text='✗ CONTRACT CANCELED — ' + (reason ? reason.message.split(':')[0] : 'Canceled');
+  } else {
+    noteG.style.display = 'none';
+    return;
+  }
+
+  const rect = svgEl('rect',{x:NX,y:NY,width:NW,height:NH,rx:'6',fill,stroke,'stroke-width':'1.5'});
+  const t = svgEl('text',{x:SEQ_W/2,y:NY+20,'text-anchor':'middle','font-size':'11',
+    fill:stroke,'font-family':'system-ui,sans-serif','font-weight':'700'});
+  t.textContent = text;
+
+  noteG.appendChild(rect);
+  noteG.appendChild(t);
+  noteG.style.display = 'block';
+  noteG.style.opacity = '0';
+  noteG.style.transition = 'opacity 0.4s ease';
+  setTimeout(() => { noteG.style.opacity='1'; }, 80);
+}
+
+function showPulse(contract, eventSet) {
+  const dot = document.getElementById('pulseDot');
+  if (!dot) return;
+  if (contract.status !== 'AWAITING_DISBURSEMENT') { dot.style.display='none'; return; }
+
+  let nextY = 272;
+  if (eventSet.has('STEP3_DISBURSEMENT')) nextY = 650;
+  else if (eventSet.has('STEP2_CONTRACT_ACTIVATED')) nextY = 540;
+  else if (eventSet.has('STEP1_MARGIN_VALIDATED')) nextY = 430;
+  else if (eventSet.has('SAGA_STARTED')) nextY = 272;
+
+  dot.setAttribute('cy', nextY);
+  dot.setAttribute('cx', '480');
+  dot.setAttribute('class','pulse-dot');
+  dot.style.display = 'block';
+}
+
+function clearDiagram() {
+  MSGS.forEach(m => {
+    const g = document.getElementById(`msg-${m.id}`);
+    if (g) { g.style.opacity='0'; g.className.baseVal='msg-group'; }
+  });
+  const noteG = document.getElementById('statusNote');
+  if (noteG) { noteG.innerHTML=''; noteG.style.display='none'; }
+  const dot = document.getElementById('pulseDot');
+  if (dot) dot.style.display='none';
+  shownMsgIds.clear();
+}
+
+// ── Info bar ───────────────────────────────────────────────────────────────
+function holderOf(accountId) {
+  const a = accounts.find(x => x.id === accountId);
+  return a ? a.holder : accountId;
+}
+
+function updateInfoBar(contract) {
+  const bar = document.getElementById('infoBar');
+  if (!contract) {
+    bar.innerHTML = '<span style="color:var(--muted)">Select a contract in the history to watch the animated SAGA diagram</span>';
+    return;
+  }
+  bar.innerHTML = `
+    <span class="protocol">${contract.contractId}</span>
+    <span class="route">${holderOf(contract.customerAccount)} · enrollment ${contract.enrollmentId}</span>
+    <span class="amount-b">${fmt(contract.requestedAmount)} over ${contract.termMonths} months</span>
+    <span class="status-badge status-${contract.status}">${labelStatus(contract.status)}</span>
+    <span style="color:var(--muted);font-size:11px;margin-left:auto">${fmtTime(contract.contractedAt)}</span>
+  `;
+}
+
+// ── Amortization panel ──────────────────────────────────────────────────────
+function updateAmortPanel(contract) {
+  const empty = document.getElementById('amortEmpty');
+  const body  = document.getElementById('amortBody');
+  const sub   = document.getElementById('amortSub');
+
+  if (!contract) {
+    empty.style.display = 'block';
+    body.style.display = 'none';
+    sub.textContent = '';
+    return;
+  }
+  empty.style.display = 'none';
+  body.style.display = 'block';
+  sub.textContent = contract.contractId;
+
+  const pct = contract.termMonths ? Math.round(100 * contract.installmentsPaid / contract.termMonths) : 0;
+  document.getElementById('progressLabel').textContent = `${contract.installmentsPaid} / ${contract.termMonths} installments`;
+  document.getElementById('progressPct').textContent = `${pct}%`;
+  document.getElementById('progressFill').style.width = `${pct}%`;
+  document.getElementById('outstandingVal').textContent = fmt(contract.outstandingBalance);
+  document.getElementById('installmentVal').textContent = fmt(contract.installmentAmount);
+
+  const btn = document.getElementById('deductionBtn');
+  btn.disabled = contract.status !== 'ACTIVE';
+  btn.textContent = contract.status === 'ACTIVE' ? '🔁 Simulate next deduction' : (
+    contract.status === 'PAID_OFF' ? '✓ Contract paid off' : 'Contract is not active'
+  );
+
+  const log = (contract.history || []).filter(e => e.step === 'PAYROLL_DEDUCTION' || e.step === 'PAID_OFF');
+  const logEl = document.getElementById('deductionLog');
+  logEl.innerHTML = log.length ? log.slice().reverse().map(e => `
+    <div class="deduction-item">
+      <span class="installment">${e.step === 'PAID_OFF' ? '✓ Paid off' : e.message.split('—')[0].trim()}</span>
+      <span class="balance">${fmtTime(e.timestamp)}</span>
+    </div>
+  `).join('') : '<div class="hint">No deductions recorded yet.</div>';
+}
+
+// ── Select contract ─────────────────────────────────────────────────────────
+function selectContract(id, replay=false) {
+  selectedId = id;
+  shownMsgIds = new Set();
+
+  document.querySelectorAll('.hist-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === id);
+  });
+
+  const contract = contracts.find(c => c.contractId === id);
+  updateInfoBar(contract);
+  updateDiagram(contract, replay);
+  updateAmortPanel(contract);
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function labelStatus(s){
+  return {AWAITING_DISBURSEMENT:'⏳ AWAITING',ACTIVE:'● ACTIVE',PAID_OFF:'✓ PAID OFF',CANCELED:'✗ CANCELED'}[s]||s;
+}
+
+function renderAccounts(prev={}) {
+  const el = document.getElementById('accountList');
+  if (!accounts.length){el.innerHTML='<div class="empty">No accounts</div>';return;}
+  el.innerHTML = accounts.map(a => {
+    const changed = prev[a.id]!==undefined && String(prev[a.id])!==String(a.balance);
+    return `<div class="account-card">
+      <div><div class="account-id">${a.id}</div><div class="account-name">${a.holder}</div></div>
+      <div class="account-balance ${changed?'balance-changed':''}">${fmt(a.balance)}</div>
+    </div>`;
+  }).join('');
+}
+
+function populateAccountSelect() {
+  const sel = document.getElementById('customerAccount');
+  const cur = sel.value;
+  sel.innerHTML = accounts.map(a=>
+    `<option value="${a.id}">${a.id} — ${a.holder} (${fmt(a.balance)})</option>`
+  ).join('');
+  if (cur) sel.value = cur;
+}
+
+function renderHistoryMini() {
+  const panel = document.getElementById('historyMini');
+  document.getElementById('histCount').textContent = contracts.length ? `(${contracts.length})` : '';
+
+  if (!contracts.length){
+    panel.innerHTML='<div class="empty">No contracts yet.<br>Use the form or the quick scenarios.</div>';
+    return;
+  }
+
+  panel.innerHTML = contracts.map(c => `
+    <div class="hist-item ${c.contractId===selectedId?'selected':''}" data-id="${c.contractId}"
+         onclick="selectContract('${c.contractId}', true)">
+      <div>
+        <div class="hist-proto">${c.contractId}</div>
+        <div class="hist-route">${holderOf(c.customerAccount)} &nbsp;<strong>${fmt(c.requestedAmount)}</strong> over ${c.termMonths} months</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+        <span class="status-badge status-${c.status}">${labelStatus(c.status)}</span>
+        <span class="hist-val">${c.installmentsPaid}/${c.termMonths} installments</span>
+      </div>
+    </div>
+  `).join('');
+
+  if (!selectedId && contracts.length) {
+    selectContract(contracts[0].contractId, true);
+  } else if (selectedId) {
+    const c = contracts.find(x => x.contractId === selectedId);
+    if (c) {
+      updateInfoBar(c);
+      updateDiagram(c, false);
+      updateAmortPanel(c);
+    }
+  }
+}
+
+// ── Form helpers ─────────────────────────────────────────────────────────────
+function generateEnrollment() {
+  document.getElementById('enrollmentId').value = 'ENR-' + Date.now().toString().slice(-6);
+}
+
+// ── Loan submission ──────────────────────────────────────────────────────────
+async function submitLoan() {
+  const customerAccount = document.getElementById('customerAccount').value;
+  const enrollmentId    = document.getElementById('enrollmentId').value.trim();
+  const monthlyIncome   = parseFloat(document.getElementById('monthlyIncome').value);
+  const requestedAmount = parseFloat(document.getElementById('requestedAmount').value);
+  const termMonths      = parseInt(document.getElementById('termMonths').value, 10);
+  const alertEl = document.getElementById('alert');
+
+  alertEl.className='alert'; alertEl.textContent='';
+  if (!enrollmentId) { alertEl.className='alert error'; alertEl.textContent='Enter (or generate) an enrollment id.'; return; }
+  if (!monthlyIncome || monthlyIncome<=0) { alertEl.className='alert error'; alertEl.textContent='Enter a valid monthly income.'; return; }
+  if (!requestedAmount || requestedAmount<100) { alertEl.className='alert error'; alertEl.textContent='Minimum amount is $100.00.'; return; }
+  if (!termMonths || termMonths<24 || termMonths>120) { alertEl.className='alert error'; alertEl.textContent='Term must be between 24 and 120 months.'; return; }
+
+  const btn=document.getElementById('loanBtn');
+  btn.disabled=true; btn.textContent='⏳ Sending…';
+  try {
+    const r = await api('/loans/payroll',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({customerAccount,enrollmentId,monthlyIncome,requestedAmount,termMonths})
+    });
+    alertEl.className='alert success';
+    alertEl.textContent=`✓ ${r.contractId} — installment ${fmt(r.installmentAmount)}. Follow the diagram on the right.`;
+    selectedId = r.contractId;
+    shownMsgIds = new Set();
+    await Promise.all([fetchAccounts(), fetchContracts()]);
+  } catch (e) {
+    alertEl.className='alert error';
+    alertEl.textContent = e.status === 400
+      ? 'Invalid request (duplicate enrollment or data outside the rules).'
+      : 'Error requesting loan.';
+  } finally {
+    btn.disabled=false; btn.textContent='Take Loan →';
+  }
+}
+
+async function quickScenario(type) {
+  const suffix = Date.now().toString().slice(-6);
+  if (type === 'normal') {
+    document.getElementById('customerAccount').value = 'ACC-001';
+    document.getElementById('enrollmentId').value = 'ENR-' + suffix;
+    document.getElementById('monthlyIncome').value = 3000.00;
+    document.getElementById('requestedAmount').value = 5000.00;
+    document.getElementById('termMonths').value = 36;
+  } else {
+    document.getElementById('customerAccount').value = 'ACC-002';
+    document.getElementById('enrollmentId').value = 'ENR-' + suffix;
+    document.getElementById('monthlyIncome').value = 500.00;
+    document.getElementById('requestedAmount').value = 10000.00;
+    document.getElementById('termMonths').value = 24;
+  }
+  await submitLoan();
+}
+
+// ── Manual deduction ─────────────────────────────────────────────────────────
+async function simulateDeduction() {
+  if (!selectedId) return;
+  const btn = document.getElementById('deductionBtn');
+  btn.disabled = true;
+  try {
+    await api(`/loans/payroll/${selectedId}/simulate-deduction`, { method:'POST' });
+    await fetchContracts();
+  } catch {
+    // the contract may have been paid off/canceled between checks
+    await fetchContracts();
+  }
+}
+
+// ── Fetch ──────────────────────────────────────────────────────────────────
+async function fetchHealth(){
+  try{
+    const d=await api('/transfers/health');
+    document.getElementById('healthDot').className='dot online';
+    document.getElementById('healthLabel').textContent=d.kafka+' · '+d.sqs;
+  }catch{
+    document.getElementById('healthDot').className='dot offline';
+    document.getElementById('healthLabel').textContent='offline';
+  }
+}
+
+async function fetchAccounts(){
+  const data=await api('/transfers/accounts');
+  const prev=Object.fromEntries(accounts.map(a=>[a.id,a.balance]));
+  accounts=data;
+  renderAccounts(prev);
+  populateAccountSelect();
+}
+
+async function fetchContracts(){
+  contracts=await api('/loans/payroll');
+  renderHistoryMini();
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+let refreshing=false;
+async function poll(){
+  if(refreshing)return;
+  refreshing=true;
+  const lbl=document.getElementById('refreshLabel');
+  try{
+    await Promise.all([fetchHealth(),fetchAccounts(),fetchContracts()]);
+    lbl.innerHTML=`<span style="color:var(--green)">✓</span> updated ${new Date().toLocaleTimeString('en-US')}`;
+  }catch{
+    lbl.innerHTML=`<span style="color:var(--red)">✗</span> error`;
+  }finally{refreshing=false;}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+initDiagram();
+generateEnrollment();
+poll();
+setInterval(poll, 2000);
+</script>
+<script src="chatbot.js" defer></script>
+</body>
+</html>

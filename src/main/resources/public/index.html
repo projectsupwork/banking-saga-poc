@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banking Transfer POC — SAGA Dashboard</title>
+<link rel="stylesheet" href="chatbot.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263248;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;
+  --green:#10b981;--green-dim:#064e3b;
+  --red:#ef4444;--red-dim:#7f1d1d;
+  --yellow:#f59e0b;--yellow-dim:#78350f;
+  --blue:#3b82f6;--blue-dim:#1e3a5f;
+  --radius:10px;
+}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+/* Header */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+.nav-link{color:var(--muted);text-decoration:none;font-size:12.5px;border:1px solid var(--border);border-radius:6px;padding:5px 10px;transition:border-color .2s,color .2s}
+.nav-link:hover{color:var(--text);border-color:var(--blue)}
+.health-badge{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s}
+.dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.offline{background:var(--red)}
+.refresh-indicator{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{animation:spin 1s linear infinite;display:inline-block}
+
+/* Layout */
+main{display:grid;grid-template-columns:300px 1fr;gap:16px;padding:16px 20px;max-width:1600px;margin:0 auto}
+
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+
+/* Accounts */
+.account-list{display:flex;flex-direction:column;gap:8px}
+.account-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s}
+.account-card:hover{border-color:var(--blue)}
+.account-id{font-size:11px;color:var(--muted);margin-bottom:2px}
+.account-name{font-weight:600;font-size:13px}
+.account-balance{font-size:17px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums}
+@keyframes flash{0%,100%{color:var(--green)}50%{color:#6ee7b7}}
+.balance-changed{animation:flash .5s ease}
+
+/* Form */
+.form-group{margin-bottom:10px}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:500}
+select,input[type=number]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;outline:none;transition:border-color .2s}
+select:focus,input:focus{border-color:var(--blue)}
+select option{background:var(--surface)}
+.btn{width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s}
+.btn:hover{opacity:.9}
+.btn:active{transform:scale(.99)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.alert{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:12px;display:none}
+.alert.success{background:var(--green-dim);color:#6ee7b7;display:block}
+.alert.error{background:var(--red-dim);color:#fca5a5;display:block}
+.divider{height:1px;background:var(--border);margin:12px 0}
+
+/* Right column */
+.right-col{display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 88px)}
+
+/* Info bar */
+.info-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:12px;min-height:44px;font-size:13px}
+.info-bar .protocol{font-family:monospace;color:var(--blue);font-weight:700;font-size:13px}
+.info-bar .route{color:var(--muted)}
+.info-bar .amount-b{font-weight:700}
+.status-badge{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.04em;white-space:nowrap}
+.status-PROCESSING{background:var(--yellow-dim);color:var(--yellow)}
+.status-COMPLETED{background:var(--green-dim);color:var(--green)}
+.status-CANCELED{background:var(--red-dim);color:var(--red)}
+.status-FAILED{background:#3b0764;color:#d8b4fe}
+
+/* Diagram */
+.diagram-wrap{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;flex-shrink:0}
+.diagram-wrap svg{display:block;width:820px;height:820px}
+
+/* Mini history */
+.history-mini-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;flex:1;min-height:160px;overflow:hidden;display:flex;flex-direction:column}
+.history-mini{display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+.hist-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border-color .15s,background .15s;font-size:12px}
+.hist-item:hover{border-color:var(--blue);background:var(--blue-dim)}
+.hist-item.selected{border-color:var(--blue);background:var(--blue-dim)}
+.hist-proto{font-family:monospace;color:var(--blue);font-size:11px;font-weight:600}
+.hist-route{color:var(--text)}
+.hist-val{color:var(--muted);font-size:11px}
+.empty{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
+
+/* SVG diagram elements */
+.actor-box{fill:#1e293b;stroke:#475569;stroke-width:1.5}
+.actor-label{fill:#e2e8f0;font-family:system-ui,sans-serif;font-size:11px;font-weight:600;text-anchor:middle}
+.actor-icon{text-anchor:middle;font-size:16px}
+.lifeline{stroke:#334155;stroke-width:1.5;stroke-dasharray:6,4}
+.msg-line{stroke-width:2;fill:none}
+.msg-label{font-family:monospace;font-size:10px;text-anchor:middle}
+.msg-group{opacity:0}
+.msg-group.visible{opacity:1}
+
+/* Status note in SVG */
+.note-box-ok{fill:#064e3b;stroke:#10b981;stroke-width:1.5;rx:6}
+.note-box-err{fill:#7f1d1d;stroke:#ef4444;stroke-width:1.5}
+.note-box-warn{fill:#78350f;stroke:#f59e0b;stroke-width:1.5}
+.note-text{font-family:system-ui,sans-serif;font-size:11px;font-weight:700;text-anchor:middle}
+
+/* Pulse animation for PROCESSING */
+@keyframes lifePulse{0%,100%{opacity:.3;r:4}50%{opacity:1;r:7}}
+.pulse-dot{animation:lifePulse 1.2s ease-in-out infinite}
+
+@media(max-width:900px){main{grid-template-columns:1fr}.right-col{min-height:auto}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🏦 Banking Transfer POC &mdash; SAGA Dashboard</div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <a class="nav-link" href="/ui/payroll-loan.html">→ Payroll Loan</a>
+    <a class="nav-link" href="/ui/dashboard.html">→ Dashboard</a>
+    <div class="refresh-indicator" id="refreshLabel"><span class="spinner">⟳</span> refreshing…</div>
+    <div class="health-badge"><div class="dot" id="healthDot"></div><span id="healthLabel">checking…</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- LEFT SIDEBAR -->
+  <div style="display:flex;flex-direction:column;gap:12px">
+
+    <div class="card">
+      <div class="card-title">💳 Accounts</div>
+      <div class="account-list" id="accountList"><div class="empty">⏳ Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ New Transfer</div>
+      <div class="form-group"><label>Source Account</label><select id="sourceAccount"></select></div>
+      <div class="form-group"><label>Target Account</label><select id="targetAccount"></select></div>
+      <div class="form-group"><label>Amount ($)</label><input type="number" id="amount" min="0.01" step="0.01" placeholder="500.00"></div>
+      <button class="btn" id="transferBtn" onclick="submitTransfer()">Transfer →</button>
+      <div class="alert" id="alert"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ Quick Scenarios</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <button class="btn" style="background:var(--green)" onclick="quickTransfer('ACC-001','ACC-002',500)">Alice → Bob &nbsp;$500</button>
+        <button class="btn" style="background:var(--red)"   onclick="quickTransfer('ACC-003','ACC-001',9999)">Carol → Alice &nbsp;$9,999 (insufficient)</button>
+        <button class="btn" style="background:var(--yellow);color:#000" onclick="quickTransfer('ACC-002','ACC-003',200)">Bob → Carol &nbsp;$200</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-col">
+
+    <!-- Selected transfer bar -->
+    <div class="info-bar" id="infoBar" style="color:var(--muted)">
+      Select a transfer in the history to watch the animated SAGA diagram
+    </div>
+
+    <!-- Sequence Diagram -->
+    <div class="diagram-wrap">
+      <svg id="seqDiagram" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <!-- Mini history list -->
+    <div class="history-mini-wrap">
+      <div class="card-title" style="margin-bottom:8px">📋 History <span id="histCount" style="color:var(--border);font-weight:400"></span></div>
+      <div class="history-mini" id="historyMini">
+        <div class="empty">No transfers yet.</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const SEQ_W = 820, SEQ_H = 820;
+
+const ACTORS = [
+  { id:'client',   label:'Client',         icon:'👤', x:60  },
+  { id:'api',      label:'REST API',       icon:'⚡', x:185 },
+  { id:'kafka',    label:'Kafka',          icon:'📨', x:318 },
+  { id:'consumer', label:'Consumer',       icon:'⚙️', x:452 },
+  { id:'account',  label:'AccountService', icon:'🏦', x:600 },
+  { id:'sqs',      label:'SQS',            icon:'📬', x:750 },
+];
+const ACTOR_BOX_H = 58;
+
+// type: call=sync solid blue | async=dashed yellow | return=dashed green | error=solid red
+const MSGS = [
+  // SAGA_STARTED
+  {id:'m01',from:0,to:1,label:'POST /transfers',               grp:0,y:108,type:'call'},
+  {id:'m02',from:1,to:2,label:'publish(event)',                grp:0,y:158,type:'async'},
+  {id:'m03',from:1,to:0,label:'202 Accepted',                  grp:0,y:208,type:'return'},
+  // STEP1
+  {id:'m04',from:2,to:3,label:'consume(event)',                grp:1,y:272,type:'async'},
+  {id:'m05',from:3,to:4,label:'validateBalance(src, amount)',  grp:1,y:320,type:'call'},
+  {id:'m06',from:4,to:3,label:'OK — sufficient balance',       grp:1,y:366,type:'return'},
+  // STEP1 error path
+  {id:'m06e',from:4,to:3,label:'✗ InsufficientBalanceException',grp:1,y:366,type:'error'},
+  // STEP2
+  {id:'m07',from:3,to:4,label:'debit(source, amount)',         grp:2,y:430,type:'call'},
+  {id:'m08',from:4,to:3,label:'newBalance (debited)',          grp:2,y:476,type:'return'},
+  // STEP3
+  {id:'m09',from:3,to:4,label:'credit(target, amount)',        grp:3,y:540,type:'call'},
+  {id:'m10',from:4,to:3,label:'newBalance (credited)',         grp:3,y:586,type:'return'},
+  // STEP4 happy
+  {id:'m11',from:3,to:5,label:'publish(notification)',         grp:4,y:650,type:'async'},
+  {id:'m12',from:5,to:3,label:'messageId (sent)',              grp:4,y:696,type:'return'},
+  // STEP4 error
+  {id:'m11w',from:3,to:5,label:'publish(notification)',        grp:4,y:650,type:'async'},
+  {id:'m12e',from:5,to:3,label:'✗ SQS Error (non-critical)',   grp:4,y:696,type:'error'},
+];
+
+const GROUPS = [
+  {grp:0, msgIds:['m01','m02','m03'], events:['SAGA_STARTED']},
+  {grp:1, msgIds:['m04','m05','m06'], events:['STEP1_VALIDATION']},
+  {grp:2, msgIds:['m07','m08'],       events:['STEP2_DEBIT']},
+  {grp:3, msgIds:['m09','m10'],       events:['STEP3_CREDIT']},
+  {grp:4, msgIds:['m11','m12'],       events:['STEP4_SQS']},
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
+let accounts = [];
+let history  = [];
+let selectedId = null;
+let shownMsgIds = new Set(); // for the currently selected transfer
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmt = n => '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-US') : '';
+
+function svgEl(tag, attrs={}) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+// ── Build SVG skeleton ─────────────────────────────────────────────────────
+function initDiagram() {
+  const svg = document.getElementById('seqDiagram');
+  svg.innerHTML = '';
+
+  // Defs: arrowhead markers
+  const defs = svgEl('defs');
+  const colors = {blue:'#3b82f6',green:'#10b981',yellow:'#f59e0b',red:'#ef4444',muted:'#475569'};
+  for (const [name, fill] of Object.entries(colors)) {
+    const m = svgEl('marker',{id:`arrow-${name}`,viewBox:'0 0 10 8',refX:'9',refY:'4',markerWidth:'6',markerHeight:'6',orient:'auto'});
+    const p = svgEl('path',{d:'M 0 0 L 10 4 L 0 8 z',fill});
+    m.appendChild(p);
+    defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+
+  // Separator lines between groups (visual hint)
+  const sepYs = [245, 405, 510, 622];
+  for (const sy of sepYs) {
+    const sep = svgEl('line',{x1:'20',y1:sy,x2:'800',y2:sy,stroke:'#1e293b',
+      'stroke-width':'1','stroke-dasharray':'4,4'});
+    svg.appendChild(sep);
+  }
+
+  // Lifelines (draw before actor boxes so boxes are on top)
+  ACTORS.forEach(actor => {
+    const ll = svgEl('line',{
+      x1:actor.x,y1:ACTOR_BOX_H+6,x2:actor.x,y2:SEQ_H-16,
+      stroke:'#334155','stroke-width':'1.5','stroke-dasharray':'6,4'
+    });
+    ll.setAttribute('class','lifeline');
+    svg.appendChild(ll);
+  });
+
+  // Actor boxes
+  const BW=110, BH=52;
+  ACTORS.forEach(actor => {
+    const bx = actor.x - BW/2;
+    // Shadow rect
+    const shadow = svgEl('rect',{x:bx+2,y:10,width:BW,height:BH,rx:'8',fill:'#0f172a','opacity':'.6'});
+    svg.appendChild(shadow);
+    // Box
+    const rect = svgEl('rect',{x:bx,y:8,width:BW,height:BH,rx:'8',
+      fill:'#1e293b',stroke:'#475569','stroke-width':'1.5'});
+    svg.appendChild(rect);
+    // Icon
+    const icon = svgEl('text',{x:actor.x,y:28,'text-anchor':'middle','font-size':'15','dominant-baseline':'middle'});
+    icon.textContent = actor.icon;
+    svg.appendChild(icon);
+    // Label
+    const lbl = svgEl('text',{x:actor.x,y:46,'text-anchor':'middle','font-size':'10.5',
+      fill:'#cbd5e1','font-family':'system-ui,sans-serif','font-weight':'600'});
+    lbl.textContent = actor.label;
+    svg.appendChild(lbl);
+  });
+
+  // Message groups (initially hidden)
+  MSGS.forEach(msg => {
+    const g = buildMsgGroup(msg);
+    g.setAttribute('id', `msg-${msg.id}`);
+    g.setAttribute('class','msg-group');
+    svg.appendChild(g);
+  });
+
+  // Status note placeholder (id=statusNote)
+  const noteG = svgEl('g');
+  noteG.setAttribute('id','statusNote');
+  noteG.style.display = 'none';
+  svg.appendChild(noteG);
+
+  // Pulse dot placeholder
+  const pulse = svgEl('circle',{id:'pulseDot',cx:'452',cy:'272',r:'5',fill:'#3b82f6'});
+  pulse.style.display = 'none';
+  svg.appendChild(pulse);
+}
+
+function buildMsgGroup(msg) {
+  const g = svgEl('g');
+  const fromX = ACTORS[msg.from].x;
+  const toX   = ACTORS[msg.to].x;
+  const y     = msg.y;
+  const goRight = toX > fromX;
+
+  const typeStyle = {
+    call:   {stroke:'#3b82f6',dasharray:null,  marker:'blue'},
+    return: {stroke:'#10b981',dasharray:'6,3', marker:'green'},
+    async:  {stroke:'#f59e0b',dasharray:'6,3', marker:'yellow'},
+    error:  {stroke:'#ef4444',dasharray:null,  marker:'red'},
+  }[msg.type] || {stroke:'#94a3b8',dasharray:null,marker:'muted'};
+
+  const ARROW_GAP = 11;
+  const x1 = fromX;
+  const x2 = goRight ? toX - ARROW_GAP : toX + ARROW_GAP;
+  const len = Math.abs(x2 - x1);
+
+  // Line
+  const line = svgEl('line',{x1,y1:y,x2,y2:y,
+    stroke:typeStyle.stroke,'stroke-width':'2',
+    'marker-end':`url(#arrow-${typeStyle.marker})`});
+  if (typeStyle.dasharray) line.setAttribute('stroke-dasharray', typeStyle.dasharray);
+  line.setAttribute('data-len', len);
+  line.setAttribute('class','arrow-line');
+  g.appendChild(line);
+
+  // Label background for readability
+  const midX = (fromX + toX) / 2;
+  const labelY = y - 6;
+  const bg = svgEl('rect',{x:midX-58,y:labelY-11,width:'116',height:'14',rx:'3',fill:'#0f172a','opacity':'.75'});
+  g.appendChild(bg);
+
+  // Label
+  const lbl = svgEl('text',{x:midX,y:labelY,
+    'text-anchor':'middle','font-size':'10','font-family':'monospace',fill:typeStyle.stroke});
+  lbl.textContent = msg.label;
+  g.appendChild(lbl);
+
+  return g;
+}
+
+// ── Update diagram from transfer data ──────────────────────────────────────
+function getVisibleIds(transfer) {
+  const eventSet = new Set((transfer.events || []).map(e => e.step));
+  const ids = new Set();
+
+  // Happy path
+  if (eventSet.has('SAGA_STARTED'))     ['m01','m02','m03'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP1_VALIDATION')) ['m04','m05','m06'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP2_DEBIT'))      ['m07','m08'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP3_CREDIT'))     ['m09','m10'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP4_SQS'))        ['m11','m12'].forEach(x=>ids.add(x));
+  if (eventSet.has('STEP4_SQS_FAILED')) ['m11w','m12e'].forEach(x=>ids.add(x));
+
+  // CANCELED at step 1 (insufficient balance): consume + call happened, return = error
+  if (eventSet.has('CANCELED') && !eventSet.has('STEP1_VALIDATION')) {
+    ids.add('m04'); ids.add('m05'); ids.add('m06e');
+  }
+
+  return ids;
+}
+
+function updateDiagram(transfer, animate) {
+  if (!transfer) { clearDiagram(); return; }
+
+  const visibleIds = getVisibleIds(transfer);
+  const eventSet   = new Set((transfer.events || []).map(e => e.step));
+
+  // Determine which are new (to animate) vs already shown
+  const newIds = new Set([...visibleIds].filter(id => !shownMsgIds.has(id)));
+  shownMsgIds  = new Set(visibleIds);
+
+  // Group messages by grp order for sequential animation
+  const allMsgMap = Object.fromEntries(MSGS.map(m=>[m.id,m]));
+
+  // Sort visible ids by their y position
+  const ordered = [...visibleIds].sort((a,b) => {
+    const ma = allMsgMap[a], mb = allMsgMap[b];
+    return (ma?.y||0) - (mb?.y||0);
+  });
+
+  if (animate) {
+    // Hide all first, then replay sequentially
+    MSGS.forEach(m => {
+      const g = document.getElementById(`msg-${m.id}`);
+      if (g) { g.className.baseVal='msg-group'; g.style.opacity='0'; }
+    });
+    shownMsgIds.clear();
+
+    let delay = 0;
+    let lastGrp = -1;
+    for (const id of ordered) {
+      const m = allMsgMap[id];
+      const grpDelay = (m && m.grp !== lastGrp) ? 300 : 0;
+      delay += grpDelay + 180;
+      if (m) lastGrp = m.grp;
+      revealMsg(id, delay);
+    }
+
+    // Status note after all messages
+    const totalDelay = delay + 400;
+    setTimeout(() => showStatusNote(transfer, eventSet), totalDelay);
+    setTimeout(() => showPulse(transfer, eventSet), totalDelay);
+  } else {
+    // Animate only newly revealed messages
+    const sortedNew = [...newIds].sort((a,b) => (allMsgMap[a]?.y||0)-(allMsgMap[b]?.y||0));
+    let delay = 0;
+    for (const id of sortedNew) {
+      revealMsg(id, delay);
+      delay += 200;
+    }
+    // Already visible → show immediately without animation
+    for (const id of visibleIds) {
+      if (!newIds.has(id)) {
+        const g = document.getElementById(`msg-${id}`);
+        if (g) { g.style.opacity='1'; g.className.baseVal='msg-group visible'; }
+      }
+    }
+    showStatusNote(transfer, eventSet);
+    showPulse(transfer, eventSet);
+  }
+
+  // Hide messages not in visibleIds
+  MSGS.forEach(m => {
+    if (!visibleIds.has(m.id)) {
+      const g = document.getElementById(`msg-${m.id}`);
+      if (g && !newIds.has(m.id)) { g.style.opacity='0'; g.className.baseVal='msg-group'; }
+    }
+  });
+}
+
+function revealMsg(id, delay) {
+  const g = document.getElementById(`msg-${id}`);
+  if (!g) return;
+  const line = g.querySelector('line.arrow-line');
+  const lbl  = g.querySelector('text');
+  const bg   = g.querySelector('rect');
+  const len  = line ? parseFloat(line.getAttribute('data-len')||'200') : 200;
+
+  g.style.opacity = '1';
+  if (line) {
+    line.style.strokeDasharray  = String(len);
+    line.style.strokeDashoffset = String(len);
+    line.style.transition = 'none';
+  }
+  if (lbl) { lbl.style.opacity='0'; lbl.style.transition='none'; }
+  if (bg)  { bg.style.opacity='0';  bg.style.transition='none'; }
+
+  setTimeout(() => {
+    if (line) {
+      line.style.transition = `stroke-dashoffset 0.38s ease`;
+      line.style.strokeDashoffset = '0';
+    }
+    setTimeout(() => {
+      if (lbl) { lbl.style.transition='opacity 0.2s ease'; lbl.style.opacity='1'; }
+      if (bg)  { bg.style.transition='opacity 0.2s ease';  bg.style.opacity='.75'; }
+      setTimeout(() => {
+        if (line) { line.style.strokeDasharray='none'; line.style.transition=''; }
+        if (lbl)  { lbl.style.transition=''; }
+        if (bg)   { bg.style.transition=''; }
+        g.className.baseVal = 'msg-group visible';
+      }, 220);
+    }, 280);
+  }, delay);
+}
+
+function showStatusNote(transfer, eventSet) {
+  const noteG = document.getElementById('statusNote');
+  if (!noteG) return;
+  noteG.innerHTML = '';
+
+  const NW=260, NH=32, NX=(SEQ_W-NW)/2, NY=770;
+
+  let fill,stroke,text;
+  if (transfer.status === 'COMPLETED') {
+    fill='#064e3b'; stroke='#10b981';
+    text='✓ SAGA COMPLETED — Transfer executed successfully';
+  } else if (transfer.status === 'CANCELED') {
+    fill='#7f1d1d'; stroke='#ef4444';
+    const reason = (transfer.events||[]).find(e=>e.step==='CANCELED');
+    text='✗ SAGA CANCELED — ' + (reason ? reason.message.split(':')[0] : 'Canceled');
+  } else if (transfer.status === 'FAILED') {
+    fill='#3b0764'; stroke='#d8b4fe';
+    text='⚠ CRITICAL FAILURE — Manual intervention required';
+  } else {
+    noteG.style.display = 'none';
+    return;
+  }
+
+  const rect = svgEl('rect',{x:NX,y:NY,width:NW,height:NH,rx:'6',fill,stroke,'stroke-width':'1.5'});
+  const t = svgEl('text',{x:SEQ_W/2,y:NY+20,'text-anchor':'middle','font-size':'11',
+    fill:stroke,'font-family':'system-ui,sans-serif','font-weight':'700'});
+  t.textContent = text;
+
+  noteG.appendChild(rect);
+  noteG.appendChild(t);
+  noteG.style.display = 'block';
+  noteG.style.opacity = '0';
+  noteG.style.transition = 'opacity 0.4s ease';
+  setTimeout(() => { noteG.style.opacity='1'; }, 80);
+}
+
+function showPulse(transfer, eventSet) {
+  const dot = document.getElementById('pulseDot');
+  if (!dot) return;
+  if (transfer.status !== 'PROCESSING') { dot.style.display='none'; return; }
+
+  // Find y of next expected step
+  let nextY = 272; // default: waiting for step1
+  if (eventSet.has('STEP3_CREDIT')) nextY = 650;
+  else if (eventSet.has('STEP2_DEBIT')) nextY = 540;
+  else if (eventSet.has('STEP1_VALIDATION')) nextY = 430;
+  else if (eventSet.has('SAGA_STARTED')) nextY = 272;
+
+  dot.setAttribute('cy', nextY);
+  dot.setAttribute('cx', '452'); // consumer x
+  dot.setAttribute('class','pulse-dot');
+  dot.style.display = 'block';
+}
+
+function clearDiagram() {
+  MSGS.forEach(m => {
+    const g = document.getElementById(`msg-${m.id}`);
+    if (g) { g.style.opacity='0'; g.className.baseVal='msg-group'; }
+  });
+  const noteG = document.getElementById('statusNote');
+  if (noteG) { noteG.innerHTML=''; noteG.style.display='none'; }
+  const dot = document.getElementById('pulseDot');
+  if (dot) dot.style.display='none';
+  shownMsgIds.clear();
+}
+
+// ── Info bar ───────────────────────────────────────────────────────────────
+function updateInfoBar(transfer) {
+  const bar = document.getElementById('infoBar');
+  if (!transfer) {
+    bar.innerHTML = '<span style="color:var(--muted)">Select a transfer in the history to watch the animated SAGA diagram</span>';
+    return;
+  }
+  bar.innerHTML = `
+    <span class="protocol">${transfer.protocolId}</span>
+    <span class="route">${transfer.sourceHolder} → ${transfer.targetHolder}</span>
+    <span class="amount-b">${fmt(transfer.amount)}</span>
+    <span class="status-badge status-${transfer.status}">${labelStatus(transfer.status)}</span>
+    <span style="color:var(--muted);font-size:11px;margin-left:auto">${fmtTime(transfer.startedAt)}</span>
+  `;
+}
+
+// ── Select transfer ────────────────────────────────────────────────────────
+function selectTransfer(id, replay=false) {
+  selectedId = id;
+  shownMsgIds = new Set();
+
+  // Update mini list highlight
+  document.querySelectorAll('.hist-item').forEach(el => {
+    el.classList.toggle('selected', el.dataset.id === id);
+  });
+
+  const transfer = history.find(t => t.protocolId === id);
+  updateInfoBar(transfer);
+  updateDiagram(transfer, replay);
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+function labelStatus(s){
+  return {PROCESSING:'⏳ PROCESSING',COMPLETED:'✓ COMPLETED',CANCELED:'✗ CANCELED',FAILED:'⚠ FAILED'}[s]||s;
+}
+
+function renderAccounts(prev={}) {
+  const el = document.getElementById('accountList');
+  if (!accounts.length){el.innerHTML='<div class="empty">No accounts</div>';return;}
+  el.innerHTML = accounts.map(a => {
+    const changed = prev[a.id]!==undefined && String(prev[a.id])!==String(a.balance);
+    return `<div class="account-card">
+      <div><div class="account-id">${a.id}</div><div class="account-name">${a.holder}</div></div>
+      <div class="account-balance ${changed?'balance-changed':''}">${fmt(a.balance)}</div>
+    </div>`;
+  }).join('');
+}
+
+function populateSelects() {
+  ['sourceAccount','targetAccount'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = accounts.map(a=>
+      `<option value="${a.id}">${a.id} — ${a.holder} (${fmt(a.balance)})</option>`
+    ).join('');
+    if (cur) sel.value=cur;
+  });
+  if (!document.getElementById('sourceAccount').value && accounts.length>=2){
+    document.getElementById('sourceAccount').value='ACC-001';
+    document.getElementById('targetAccount').value='ACC-002';
+  }
+}
+
+function renderHistoryMini() {
+  const panel = document.getElementById('historyMini');
+  document.getElementById('histCount').textContent = history.length ? `(${history.length})` : '';
+
+  if (!history.length){
+    panel.innerHTML='<div class="empty">No transfers yet.<br>Use the form or the quick scenarios.</div>';
+    return;
+  }
+
+  const prevSelected = selectedId;
+  panel.innerHTML = history.map(t => `
+    <div class="hist-item ${t.protocolId===selectedId?'selected':''}" data-id="${t.protocolId}"
+         onclick="selectTransfer('${t.protocolId}', true)">
+      <div>
+        <div class="hist-proto">${t.protocolId}</div>
+        <div class="hist-route">${t.sourceHolder} → ${t.targetHolder} &nbsp;<strong>${fmt(t.amount)}</strong></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+        <span class="status-badge status-${t.status}">${labelStatus(t.status)}</span>
+        <span class="hist-val">${fmtTime(t.startedAt)}</span>
+      </div>
+    </div>
+  `).join('');
+
+  // Auto-select most recent if none selected
+  if (!selectedId && history.length) {
+    selectTransfer(history[0].protocolId, true);
+  }
+  // Update diagram for currently selected (new events may have arrived)
+  else if (selectedId) {
+    const t = history.find(x => x.protocolId === selectedId);
+    if (t) {
+      updateInfoBar(t);
+      updateDiagram(t, false); // don't replay, just show new events
+    }
+  }
+}
+
+// ── Transfer submission ────────────────────────────────────────────────────
+async function submitTransfer() {
+  const sourceAccount = document.getElementById('sourceAccount').value;
+  const targetAccount = document.getElementById('targetAccount').value;
+  const amount  = parseFloat(document.getElementById('amount').value);
+  const alertEl = document.getElementById('alert');
+
+  alertEl.className='alert'; alertEl.textContent='';
+  if (!amount||amount<=0){alertEl.className='alert error';alertEl.textContent='Enter a valid amount.';return;}
+
+  const btn=document.getElementById('transferBtn');
+  btn.disabled=true; btn.textContent='⏳ Sending…';
+  try {
+    const r = await api('/transfers',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sourceAccount,targetAccount,amount})
+    });
+    alertEl.className='alert success';
+    alertEl.textContent=`✓ ${r.protocolId} — follow the SAGA diagram on the right.`;
+    document.getElementById('amount').value='';
+    selectedId = r.protocolId; // auto-select new transfer
+    shownMsgIds = new Set();
+    await Promise.all([fetchAccounts(), fetchHistory()]);
+  } catch {
+    alertEl.className='alert error';
+    alertEl.textContent='Error sending transfer.';
+  } finally {
+    btn.disabled=false; btn.textContent='Transfer →';
+  }
+}
+
+async function quickTransfer(sourceAccount,targetAccount,amount){
+  document.getElementById('sourceAccount').value=sourceAccount;
+  document.getElementById('targetAccount').value=targetAccount;
+  document.getElementById('amount').value=amount;
+  await submitTransfer();
+}
+
+// ── Fetch ──────────────────────────────────────────────────────────────────
+async function fetchHealth(){
+  try{
+    const d=await api('/transfers/health');
+    document.getElementById('healthDot').className='dot online';
+    document.getElementById('healthLabel').textContent=d.kafka+' · '+d.sqs;
+  }catch{
+    document.getElementById('healthDot').className='dot offline';
+    document.getElementById('healthLabel').textContent='offline';
+  }
+}
+
+async function fetchAccounts(){
+  const data=await api('/transfers/accounts');
+  const prev=Object.fromEntries(accounts.map(a=>[a.id,a.balance]));
+  accounts=data;
+  renderAccounts(prev);
+  populateSelects();
+}
+
+async function fetchHistory(){
+  history=await api('/transfers/history');
+  renderHistoryMini();
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+let refreshing=false;
+async function poll(){
+  if(refreshing)return;
+  refreshing=true;
+  const lbl=document.getElementById('refreshLabel');
+  try{
+    await Promise.all([fetchHealth(),fetchAccounts(),fetchHistory()]);
+    lbl.innerHTML=`<span style="color:var(--green)">✓</span> updated ${new Date().toLocaleTimeString('en-US')}`;
+  }catch{
+    lbl.innerHTML=`<span style="color:var(--red)">✗</span> error`;
+  }finally{refreshing=false;}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+initDiagram();
+poll();
+setInterval(poll, 2000);
+</script>
+<script src="chatbot.js" defer></script>
+</body>
+</html>

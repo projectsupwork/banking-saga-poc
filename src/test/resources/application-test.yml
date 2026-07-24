@@ -1,0 +1,10 @@
+# Overrides for the test environment (@MicronautTest activates the "test" environment).
+#
+# The payroll deduction scheduler (PayrollLoanService.processMonthlyDeductions)
+# runs every 30s at normal runtime to simulate the monthly payroll cycle in a
+# compressed way. In unit tests that would race the automatic job against manual
+# simulateDeduction() calls on the same contracts — so the interval is stretched
+# here so it never fires while the suite is running.
+payroll-loan:
+  deduction:
+    interval: 1h
