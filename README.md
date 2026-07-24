@@ -66,7 +66,7 @@ A second, parallel SAGA implements a **Payroll Loan** product (origination + pay
 | `SqsNotificationPublisher` | Publishes JSON notifications to the SQS queue |
 | `SagaTrackerAdapter` | Singleton recording every SAGA's events for the UI |
 | `PayrollLoanController` | Receives `POST /loans/payroll`, validates input, returns `202` |
-| `PayrollLoanService` | Prices the installment (Price table), stores contracts, schedules monthly deductions |
+| `PayrollLoanService` | Prices the installment (annuity formula), stores contracts, schedules monthly deductions |
 | `PayrollLoanConsumer` | `@KafkaListener` — executes the 4 steps of the origination SAGA |
 
 The transfer domain follows a **hexagonal (ports & adapters)** layout under `transfer/`: pure domain + use cases behind inbound/outbound ports, with web, Kafka and SQS confined to adapters.
@@ -178,7 +178,7 @@ POST /loans/payroll
     "monthlyIncome": 3000.00, "requestedAmount": 5000.00, "termMonths": 36 }
 
 ┌── REST API ──────────────────────────────────────────────────────────────┐
-│  1. Prices the installment with the Price table (fixed 1.54%/month)      │
+│  1. Prices the installment with the annuity formula (fixed 1.54%/month)  │
 │  2. Generates contractId = "PLN-XXXXXXXX", protocolId = "LOAN-XXXXXXXX"  │
 │  3. Registers the contract as AWAITING_DISBURSEMENT                      │
 │  4. Publishes PayrollLoanRequestedEvent to Kafka                         │
@@ -207,7 +207,7 @@ by a scheduler (`PayrollLoanService.processMonthlyDeductions`, every
 `payroll-loan.deduction.interval` — 30s by default, compressed purely for the
 demo) that never calls `AccountService.debit`: the deduction happens on the
 benefit/payroll, before the money reaches the checking account. The
-outstanding balance follows Price amortization (the period's interest accrues
+outstanding balance follows annuity amortization (the period's interest accrues
 on the balance before the installment is subtracted), so the contract is paid
 off exactly after `termMonths` deductions. A cycle can also be triggered
 manually via `POST /loans/payroll/{id}/simulate-deduction`.
@@ -422,7 +422,7 @@ Unit test coverage:
 | `TransferControllerTest` | HTTP 202, response body, input validation, health endpoint |
 | `ExecuteTransferSagaServiceTest` | SAGA choreography with mocked ports: happy path, cancellation, compensation |
 | `RequestTransferServiceTest` | Request use case: ID generation, event publication, self-transfer rejection |
-| `PayrollLoanServiceTest` | Price table, payroll margin, contract life cycle (activate/cancel), deduction and payoff |
+| `PayrollLoanServiceTest` | Annuity formula, payroll margin, contract life cycle (activate/cancel), deduction and payoff |
 | `PayrollLoanControllerTest` | HTTP 202/400/404/409 with a mocked `PayrollLoanService` |
 
 ### 8.2 Tests with JaCoCo Coverage
@@ -546,7 +546,7 @@ curl -s http://localhost:8080/transfers/accounts | jq .
 
 # Step 4: manually simulate one payroll deduction cycle (skipping the 30s scheduler)
 curl -s -X POST http://localhost:8080/loans/payroll/PLN-XXXXXXXX/simulate-deduction | jq .
-# installmentsPaid increments, outstandingBalance drops per Price amortization — the account balance does NOT change
+# installmentsPaid increments, outstandingBalance drops per annuity amortization — the account balance does NOT change
 ```
 
 **Payroll margin exceeded (SAGA cancels at Step 1):**
@@ -710,7 +710,7 @@ src/
 │   │   │   └── PayrollLoanController.java       # Payroll loan REST endpoints
 │   │   ├── service/
 │   │   │   ├── AccountService.java              # Account state + operations
-│   │   │   └── PayrollLoanService.java          # Price installment, contracts, scheduled deductions
+│   │   │   └── PayrollLoanService.java          # Installment pricing, contracts, scheduled deductions
 │   │   ├── kafka/
 │   │   │   ├── PayrollLoanProducer.java         # @KafkaClient producer
 │   │   │   └── PayrollLoanConsumer.java         # @KafkaListener + origination SAGA

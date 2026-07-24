@@ -86,7 +86,7 @@ sequenceDiagram
     participant SQS
 
     Client->>API: POST /loans/payroll
-    API->>Loan: price installment (Price table, 1.54%/mo)
+    API->>Loan: price installment (annuity formula, 1.54%/mo)
     API->>Kafka: publish(PayrollLoanRequestedEvent)
     API-->>Client: 202 Accepted (contractId)
     Kafka->>Consumer: consume(event)
@@ -101,7 +101,7 @@ sequenceDiagram
 
 **Installment collection never debits the checking account.** A scheduler
 (`processMonthlyDeductions`, interval `payroll-loan.deduction.interval`,
-default 30s — compressed for the demo) applies Price amortization to the
+default 30s — compressed for the demo) applies annuity amortization to the
 outstanding balance: the period's interest accrues *before* the fixed
 installment is subtracted, so the contract pays off exactly at `termMonths`.
 The deduction models a payroll/benefit discount that happens before the money

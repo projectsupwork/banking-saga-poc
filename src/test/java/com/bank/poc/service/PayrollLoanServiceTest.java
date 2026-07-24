@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * Unit tests for PayrollLoanService.
- * Covers the Price table, the payroll margin (Step 1), the contract life
+ * Covers the annuity formula, the payroll margin (Step 1), the contract life
  * cycle (Steps 2/3 and compensation) and the payroll deduction simulation.
  *
  * Each test uses its own enrollment id so it never collides with the
@@ -31,7 +31,7 @@ class PayrollLoanServiceTest {
     PayrollLoanService service;
 
     @Test
-    @DisplayName("Origination within the payroll margin is accepted and prices the installment with the Price table")
+    @DisplayName("Origination within the payroll margin is accepted and prices the installment with the annuity formula")
     void originationWithinMarginIsAccepted() {
         var request = new PayrollLoanRequest("ACC-001", "ENR-1001",
             new BigDecimal("3000.00"), new BigDecimal("5000.00"), 36);
@@ -43,7 +43,7 @@ class PayrollLoanServiceTest {
         assertThat(response.status()).isEqualTo("PROCESSING");
         assertThat(response.installmentAmount()).isPositive();
 
-        // Price-table consistency: PV = PMT * (1 - (1+i)^-n) / i
+        // Annuity-formula consistency: PV = PMT * (1 - (1+i)^-n) / i
         double i = 0.0154;
         double n = 36;
         double expectedPv = response.installmentAmount().doubleValue() * (1 - Math.pow(1 + i, -n)) / i;
@@ -156,7 +156,7 @@ class PayrollLoanServiceTest {
         assertThat(after.get("installmentsPaid")).isEqualTo(1);
         BigDecimal balanceAfter = new BigDecimal(after.get("outstandingBalance").toString());
 
-        // Price amortization: the outstanding balance accrues the period's
+        // Annuity amortization: the outstanding balance accrues the period's
         // interest before the installment is subtracted (fixed rate of
         // 1.54%/month — same as the service).
         BigDecimal monthlyRate = new BigDecimal("0.0154");

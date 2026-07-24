@@ -192,7 +192,7 @@ public class PayrollLoanService {
 
     private void applyDeduction(PayrollLoanContract c) {
         c.installmentsPaid++;
-        // Price-table amortization: interest for the period accrues on the
+        // Annuity (fixed-installment) amortization: interest for the period accrues on the
         // outstanding balance BEFORE the installment is subtracted — that is why
         // the installment is fixed while its interest/principal split changes
         // month by month. Subtracting the installment straight from the balance
@@ -229,7 +229,7 @@ public class PayrollLoanService {
     }
 
     /**
-     * Price table: PMT = PV * i / (1 - (1+i)^-n)
+     * Standard annuity formula: PMT = PV * i / (1 - (1+i)^-n)
      */
     private BigDecimal computeInstallment(BigDecimal requestedAmount, BigDecimal monthlyRate, int termMonths) {
         double pv = requestedAmount.doubleValue();

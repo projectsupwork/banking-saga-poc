@@ -116,9 +116,9 @@ var KB = {
     },
     {
       id:'interest-rate',
-      keywords:['rate','interest','154','price','amortization'],
+      keywords:['rate','interest','154','annuity','amortization'],
       question:'What is the interest rate?',
-      answer:'Fixed rate of 1.54% per month, with Price-table amortization (interest accrues on the outstanding balance each period).'
+      answer:'Fixed rate of 1.54% per month, with annuity (fixed-installment) amortization — interest accrues on the outstanding balance each period.'
     },
     {
       id:'term',
